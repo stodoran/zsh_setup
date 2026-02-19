@@ -2,6 +2,12 @@
 
 This file is a guide for configuring the zsh shell for a better terminal experience in a Linux environment.
 
+TLDR oneliner (linux):
+
+```
+d=$(mktemp -d) && git clone https://github.com/stodoran/zsh_setup "$d/zsh_setup" && bash "$d/zsh_setup/setup.sh"
+```
+
 # Local Installation
 
 ## Terminal
