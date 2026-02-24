@@ -29,3 +29,10 @@ sudo chown -R $(whoami) $TARGET_FOLDER
 ```
 git config core.fileMode false
 ```
+
+## Search for process
+
+```
+MATCH="pid"
+ps -efj | { head -1; grep "$MATCH"; }
+```
