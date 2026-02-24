@@ -24,7 +24,7 @@ fi
 
 # Install zsh and set it as the default shell
 echo "-> Installing zsh"
-sudo apt update
+sudo apt update || true
 sudo apt install -y zsh
 
 username="$(id -un)"
