@@ -123,7 +123,7 @@ while IFS= read -r line; do
 done < "$scripts_file"
 LOAD_SCRIPTS
 
-echo "\n# Load scripts into history" >> ~/.zshrc
+echo "# Load scripts into history" >> ~/.zshrc
 echo "setopt HIST_IGNORE_ALL_DUPS" >> ~/.zshrc
 echo "source ~/.zsh/load_scripts.sh" >> ~/.zshrc
 
