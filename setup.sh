@@ -21,6 +21,11 @@ else
   echo "-> No existing .zshrc found; skipping backup"
 fi
 
+OLD_ZSHRC_VARS=""
+if [ -f "$HOME/.zshrc" ]; then
+  OLD_ZSHRC_VARS=$(grep -E '^(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$HOME/.zshrc" || true)
+fi
+
 # Install zsh and set it as the default shell
 echo "-> Installing zsh"
 sudo apt update || true
@@ -35,13 +40,20 @@ echo "-> Uninstalling old oh-my-zsh (if any), reinstalling latest"
 rm -rf "$HOME/.oh-my-zsh"
 RUNZSH=no OVERWRITE_CONFIRMATION=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" ""
 
-# Add env variables from .bashrc to .zshrc
-echo "-> Copying env variables from .bashrc"
+echo "-> Copying env variables from .bashrc and previous .zshrc"
 {
   echo ""
-  echo "# === Imported from .bashrc on $(date) ==="
-  grep -E '^\s*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$HOME/.bashrc"
-  echo "# === Imported from .bashrc on $(date) ===\n"
+  echo "# === Imported env variables on $(date) ==="
+  {
+    grep -E '^(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$HOME/.bashrc" || true
+    printf '%s\n' "$OLD_ZSHRC_VARS"
+  } | awk '{
+    line=$0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
+    split(line, a, "="); key=a[1]
+    if (!(key in vals)) order[++n]=key
+    vals[key]=$0
+  } END { for(i=1;i<=n;i++) print vals[order[i]] }'
+  echo "# === End imported env variables ==="
 } >> "$HOME/.zshrc"
 
 echo "-> Installing zsh-autosuggestions"

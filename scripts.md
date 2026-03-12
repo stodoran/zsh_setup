@@ -10,10 +10,13 @@ echo "DISK_NAME=\"${DISK_NAME}\""
 ## Mount a data disk to a folder
 
 ```
+(
 MOUNT_PATH="/data1"
+set -eu
 sudo mkdir -p $MOUNT_PATH
 sudo mount -o discard,defaults /dev/$DISK_NAME $MOUNT_PATH
 echo "Mounted $DISK_NAME to $MOUNT_PATH"
+)
 ```
 
 ## Own folder and contents
@@ -36,3 +39,23 @@ git config core.fileMode false
 MATCH="pid"
 ps -efj | { head -1; grep "$MATCH"; }
 ```
+
+## Fix all ruff issues
+
+```
+uv run ruff format
+uv run ruff check --fix
+```
+
+## Pre PR review checks
+
+```
+(
+set -e
+uv run ruff format
+uv run ruff check --fix
+uv run pytest
+uv run pyright
+)
+```
+
