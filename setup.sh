@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Script Name: setup_zsh.sh
 # Author: Stefan Todoran
-# Version: 1.1
-# Description: 
+# Version: 2.0
+# Description:
 #   This script sets up zsh as the default shell and installs oh-my-zsh
-#   (a zsh plugin manager), zsh-autosuggestions, zsh-syntax-highlighting, 
+#   (a zsh plugin manager), zsh-autosuggestions, zsh-syntax-highlighting,
 #   and powerlevel10k (custom theme). Run as root or with sudo. Note that
 #   the powerlevel10k theme requires that MesloLGS NF font be installed.
 #   This can be automatically done by running `p10k configure` if using
@@ -13,18 +13,9 @@
 
 set -euo pipefail
 
-# Backup old .zshrc file if it exists
-if [ -f "$HOME/.zshrc" ]; then
-  echo "-> Backing up existing .zshrc file"
-  cp -a "$HOME/.zshrc" "$HOME/.zshrc.bak.$(date +%F_%H%M%S)"
-else
-  echo "-> No existing .zshrc found; skipping backup"
-fi
-
-OLD_ZSHRC_VARS=""
-if [ -f "$HOME/.zshrc" ]; then
-  OLD_ZSHRC_VARS=$(grep -E '^(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$HOME/.zshrc" || true)
-fi
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+ENV_FILE="$HOME/.env"
+VAR_PATTERN='^(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*='
 
 # Install zsh and set it as the default shell
 echo "-> Installing zsh"
@@ -39,22 +30,6 @@ sudo chsh -s "${ZSH_PATH:-/bin/zsh}" "$username"
 echo "-> Uninstalling old oh-my-zsh (if any), reinstalling latest"
 rm -rf "$HOME/.oh-my-zsh"
 RUNZSH=no OVERWRITE_CONFIRMATION=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" ""
-
-echo "-> Copying env variables from .bashrc and previous .zshrc"
-{
-  echo ""
-  echo "# === Imported env variables on $(date) ==="
-  {
-    grep -E '^(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$HOME/.bashrc" || true
-    printf '%s\n' "$OLD_ZSHRC_VARS"
-  } | awk '{
-    line=$0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
-    split(line, a, "="); key=a[1]
-    if (!(key in vals)) order[++n]=key
-    vals[key]=$0
-  } END { for(i=1;i<=n;i++) print vals[order[i]] }'
-  echo "# === End imported env variables ==="
-} >> "$HOME/.zshrc"
 
 echo "-> Installing zsh-autosuggestions"
 rm -rf ~/.zsh/zsh-autosuggestions
@@ -76,16 +51,7 @@ echo "source ~/powerlevel10k/powerlevel10k.zsh-theme" >> ~/.zshrc
 echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> ~/.zshrc
 
 echo "-> Copying custom powerlevel10k theme"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cp "$SCRIPT_DIR/.p10k.zsh" "$HOME/.p10k.zsh"
-
-echo "-> Configuring powerlevel10k instant prompt"
-cat >> "$HOME/.zshrc" <<'ZSH_INSTANT_PROMPT'
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
-printf '\n%.0s' {1..100}
-ZSH_INSTANT_PROMPT
 
 echo "-> Installing fast-syntax-highlighting"
 rm -rf ~/.zsh/fast-syntax-highlighting
@@ -141,6 +107,109 @@ LOAD_SCRIPTS
 echo "# Load scripts into history" >> ~/.zshrc
 echo "setopt HIST_IGNORE_ALL_DUPS" >> ~/.zshrc
 echo "source ~/.zsh/load_scripts.sh" >> ~/.zshrc
+
+# Prepend p10k instant prompt to top of .zshrc
+echo "-> Configuring powerlevel10k instant prompt"
+{
+  cat <<'ZSH_INSTANT_PROMPT'
+# Enable Powerlevel10k instant prompt (should stay at the top of ~/.zshrc)
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+printf '\n%.0s' {1..100}
+ZSH_INSTANT_PROMPT
+  cat "$HOME/.zshrc"
+} > "$HOME/.zshrc.tmp" && mv "$HOME/.zshrc.tmp" "$HOME/.zshrc"
+
+# Source env file from .zshrc
+echo "" >> ~/.zshrc
+echo "# Environment variables (kept separate so .zshrc can be regenerated)" >> ~/.zshrc
+echo "source ~/.env" >> ~/.zshrc
+
+# Create ~/.env if it doesn't exist
+if [ ! -f "$ENV_FILE" ]; then
+  echo "-> Creating $ENV_FILE"
+  cat > "$ENV_FILE" <<'ENVHEADER'
+# This file is sourced by .zshrc. Add your env vars here so that .zshrc can be regenerated without losing them.
+ENVHEADER
+fi
+
+# Optionally migrate env variables from old configs
+echo ""
+read -r -p "Migrate env variables from .bashrc and old .zshrc into ~/.env? [y/N] " response
+if [[ "$response" =~ ^[Yy]$ ]]; then
+  echo "-> Migrating env variables to $ENV_FILE"
+
+  # Helper: strip an existing marker block from ~/.env
+  strip_block() {
+    local start_marker="$1"
+    local end_marker="$2"
+    if [ -f "$ENV_FILE" ]; then
+      awk -v start="$start_marker" -v end="$end_marker" '
+        $0 == start { skip=1; next }
+        $0 == end   { skip=0; next }
+        !skip { print }
+      ' "$ENV_FILE" > "${ENV_FILE}.tmp" && mv "${ENV_FILE}.tmp" "$ENV_FILE"
+    fi
+  }
+
+  # Helper: extract vars from a file, dedup within the file, append as a block
+  migrate_from() {
+    local source_file="$1"
+    local label="$2"
+    local start_marker="# === Migrated from $label ==="
+    local end_marker="# === End migrated from $label ==="
+
+    if [ ! -f "$source_file" ]; then
+      echo "   $source_file not found, skipping"
+      return
+    fi
+
+    local vars
+    vars=$(grep -E "$VAR_PATTERN" "$source_file" || true)
+    if [ -z "$vars" ]; then
+      echo "   No env variables found in $source_file"
+      return
+    fi
+
+    # Strip old block if rerunning
+    strip_block "$start_marker" "$end_marker"
+
+    {
+      echo ""
+      echo "$start_marker"
+      printf '%s\n' "$vars" | awk '{
+        line=$0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
+        split(line, a, "="); key=a[1]
+        if (!(key in seen)) { seen[key]=1; print $0 }
+      }'
+      echo "$end_marker"
+    } >> "$ENV_FILE"
+  }
+
+  migrate_from "$HOME/.bashrc" ".bashrc"
+  migrate_from "$HOME/.zshrc.pre-oh-my-zsh" ".zshrc"
+
+  # Warn about duplicate keys across the two blocks
+  if [ -f "$HOME/.bashrc" ] && [ -f "$HOME/.zshrc.pre-oh-my-zsh" ]; then
+    dupes=$(
+      {
+        grep -E "$VAR_PATTERN" "$HOME/.bashrc" || true
+        grep -E "$VAR_PATTERN" "$HOME/.zshrc.pre-oh-my-zsh" || true
+      } | awk '{
+        line=$0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
+        split(line, a, "="); key=a[1]
+        count[key]++
+      } END { for (k in count) if (count[k]>1) print k }' || true
+    )
+    if [ -n "$dupes" ]; then
+      echo "   Warning: these keys appear in both .bashrc and .zshrc (last definition wins):"
+      printf '     %s\n' $dupes
+    fi
+  fi
+else
+  echo "-> Skipping env variable migration"
+fi
 
 # Optionally update screenrc
 echo ""
