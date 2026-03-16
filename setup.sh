@@ -92,6 +92,9 @@ rm -rf ~/.zsh/fast-syntax-highlighting
 git clone https://github.com/zdharma-continuum/fast-syntax-highlighting ~/.zsh/fast-syntax-highlighting
 echo "source ~/.zsh/fast-syntax-highlighting/fast-syntax-highlighting.plugin.zsh" >> ~/.zshrc
 
+echo "-> Installing iterm2 shell integration"
+curl -L https://iterm2.com/shell_integration/install_shell_integration.sh | bash
+
 echo "-> Installing load_scripts.sh"
 mkdir -p "$HOME/.zsh"
 cp "$SCRIPT_DIR/scripts.md" "$HOME/.zsh/scripts.md"
