@@ -10,12 +10,30 @@ echo "DISK_NAME=\"${DISK_NAME}\""
 ## Mount a data disk to a folder
 
 ```
-(
 MOUNT_PATH="/data1"
+(
 set -eu
+echo "${DISK_NAME:?DISK_NAME is not set}"
+
 sudo mkdir -p $MOUNT_PATH
 sudo mount -o discard,defaults /dev/$DISK_NAME $MOUNT_PATH
 echo "Mounted $DISK_NAME to $MOUNT_PATH"
+)
+```
+
+## Add fstab entry for a data disk
+
+```
+(
+set -eu
+echo "${DISK_NAME:?DISK_NAME is not set}"
+echo "${MOUNT_PATH:?MOUNT_PATH is not set}"
+
+UUID=$(sudo blkid -s UUID -o value /dev/$DISK_NAME)
+if ! grep -q "UUID=$UUID" /etc/fstab; then
+  echo "UUID=$UUID $MOUNT_PATH ext4 discard,defaults,nofail 0 2" | sudo tee -a /etc/fstab
+fi
+grep "$UUID" /etc/fstab
 )
 ```
 

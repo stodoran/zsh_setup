@@ -116,7 +116,8 @@ echo "-> Configuring powerlevel10k instant prompt"
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
-printf '\n%.0s' {1..100}
+# To have prompt start at bottom of screen:
+# printf '\n%.0s' {1..100}
 ZSH_INSTANT_PROMPT
   cat "$HOME/.zshrc"
 } > "$HOME/.zshrc.tmp" && mv "$HOME/.zshrc.tmp" "$HOME/.zshrc"
